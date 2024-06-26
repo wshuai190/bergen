@@ -1,7 +1,7 @@
 init_args: 
   _target_: models.generators.llm.LLM
-  model_name: "google/gemma-2b"
+  model_name: "google/gemma-2b-it"
   max_new_tokens: 128
   max_length: 2048
-  quantization: "int4"
-batch_size: 1
+  quantization: "no"
+batch_size: 24

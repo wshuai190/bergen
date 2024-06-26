@@ -1,0 +1,11 @@
+init_args: 
+  _target_: models.generators.llm_cocom.COCOMLLM
+  model_name: "cocom"
+  decoder_model_name: "google/gemma-2b"
+  compr_model_name: null
+  max_new_tokens: 128
+  sep: True
+  compr_rate: 64
+  compr_linear_type: 'concat'
+  quantization: 'no'
+batch_size: 6

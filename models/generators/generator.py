@@ -28,13 +28,12 @@ class Generator(ABC):
 
     def compile_prompt(self, system_prompt, user_prompt, question, docs=None):
         # check if chat template allows for system prompts
-
         # if has chat_template e.g. gamma does not use it
         if self.tokenizer.chat_template == None:
             user_prompt_with_values = eval(user_prompt).replace(':\ ', ': ')
             return f"{system_prompt}\n{user_prompt_with_values}"
         else:
-            if 'system' in self.tokenizer.chat_template:
+            if ('system' in self.tokenizer.chat_template) and ("System role not supported" not in self.tokenizer.chat_template):
                 instr_prompt = [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": eval(user_prompt).replace(':\ ', ': ')}
@@ -45,8 +44,4 @@ class Generator(ABC):
                 instr_prompt = [
                     {"role": "user", "content": f"{system_prompt}\n{user_prompt_with_values}"}
                 ]    
-            return self.tokenizer.apply_chat_template(instr_prompt,  add_generation_prompt=True, tokenize=False)
-
-
-        
-
+            return self.tokenizer.apply_chat_template(instr_prompt,  add_generation_prompt=True,  tokenize=False)

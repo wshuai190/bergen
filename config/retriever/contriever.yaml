@@ -6,5 +6,4 @@ init_args:
     _target_: models.retrievers.dense.MeanPooler
   similarity: 
     _target_: models.retrievers.dense.DotProduct
-batch_size: 512
-batch_size_sim: 2048
+batch_size: 464

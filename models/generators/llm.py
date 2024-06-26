@@ -13,6 +13,7 @@ from peft import AutoPeftModelForCausalLM, PeftConfig
 import random
 import os
 import json
+from accelerate import Accelerator
 random.seed(42)
 class LLM(Generator):
     def __init__(self, 
@@ -22,7 +23,8 @@ class LLM(Generator):
                 max_length=None,
                 prompt=None,
                 quantization=None,
-                attn_implementation="flash_attention_2"
+                attn_implementation="flash_attention_2",
+                **kwargs,
                  ):
 
         # device_index = Accelerator().process_index
@@ -63,25 +65,23 @@ class LLM(Generator):
         self.tokenizer.padding_side = "left"
         self.tokenizer.pad_token = self.tokenizer.bos_token
 
-
+        print(quantization)
         if quantization == "int8":
-            quant_config = BitsAndBytesConfig(
-                llm_int8_enable_fp32_cpu_offload=True
-            )
             self.model = model_class.from_pretrained(
                 self.model_name,
-                quantization_config=quant_config,
+                load_in_8bit=True,
                 attn_implementation=attn_implementation,
                 torch_dtype=torch.bfloat16,
-                device_map='auto',
             )
 
 
         elif quantization == "int4":
+            device_index = Accelerator().process_index
+            device_map = {"": device_index} 
             quant_config = BitsAndBytesConfig(
                 load_in_4bit=True,
-                bnb_4bit_quant_type='nf4',
-                bnb_4bit_compute_dtype='bfloat16',
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16
             )
 
             self.model = model_class.from_pretrained(
@@ -89,18 +89,20 @@ class LLM(Generator):
                 quantization_config=quant_config,
                 attn_implementation=attn_implementation,
                 torch_dtype=torch.bfloat16,
-                device_map='auto',
+                device_map = {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
             )
+            
         else:
             self.model = model_class.from_pretrained(
                 self.model_name,
-                device_map='auto',
+                torch_dtype = torch.bfloat16
             )
 
         # self.model.merge_and_unload()
         #self.model.config.use_cache = False
         self.model = self.model.bfloat16()
-        self.model.eval()
+        if quantization =="no":
+            self.model = self.model.to("cuda") if torch.cuda.is_available() else self.model
         self.model.config.pretraining_tp = 1
         self.max_new_tokens = max_new_tokens
         self.prompt = prompt
@@ -139,7 +141,7 @@ class LLM(Generator):
         input_ids_list = [e["tokenized_input"]["input_ids"][0] for e in examples]
         attention_mask_list = [e["tokenized_input"]["attention_mask"][0] for e in examples]
 
-        label = [e['label'] if isinstance(e['label'], str) else e['label'] for e in examples]
+        label = [[e['label']] if isinstance(e['label'], str) else e['label'] for e in examples]
         query = [e['query'] for e in examples]
         ranking_label = [e['ranking_label'] for e in examples] if 'ranking_label' in examples[0] else [None] * len(examples)
         instr = [e["formatted_instruction"] for e in examples]
@@ -156,8 +158,7 @@ class LLM(Generator):
 
         # Assuming 0 is the appropriate padding value for attention_mask
         attention_mask_tensor = torch.stack([
-            torch.cat(
-                [torch.full((max_length - len(mask),), 0, dtype=torch.long), torch.tensor(mask, dtype=torch.long)])
+            torch.cat([torch.full((max_length - len(mask),), 0, dtype=torch.bfloat16), torch.tensor(mask, dtype=torch.bfloat16)])
             for mask in attention_mask_list
         ])
         model_input = {
@@ -197,4 +198,5 @@ class LLM(Generator):
         else:
             # without retrieval we don't put documents in the prompt
             compiled_prompt = self.compile_prompt(self.prompt.system_without_docs, self.prompt.user_without_docs, question)
+ 
         return compiled_prompt + self.get_response()

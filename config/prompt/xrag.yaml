@@ -1,0 +1,4 @@
+system: ""
+user: f"[INST] Refer to the background document and answer the questions:\n\nBackground:\ {docs}\n\nQuestion:\ {question}[/INST] The answer is:"
+system_without_docs: ""
+user_without_docs: f"[INST] Answer the question:\n\nQuestion:\ {question}[/INST] The answer is:"

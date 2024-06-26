@@ -2,4 +2,5 @@ init_args:
   _target_: models.generators.oracle_provenance.OracleProvenance
   model_name: "oracle_provenance"
   max_length: null
+  max_new_tokens: 256
 batch_size: 1024

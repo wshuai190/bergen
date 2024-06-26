@@ -9,6 +9,7 @@ from modules.rerank import Rerank
 from modules.generate import Generate
 from modules.dataset_processor import ProcessDatasets
 from modules.metrics import RAGMetrics
+from models.generators.llm_cocom import COCOMLLM
 import time 
 import shutil
 import os 
@@ -119,13 +120,14 @@ class RAG:
             ) if reranker_config != None else None
 
 
-        self.generator = Generate(**generator_config, prompt=prompt) if generator_config != None else None
+        self.generator = Generate(**generator_config, prompt=prompt, generation_top_k=self.generation_top_k) if generator_config != None else None
 
         
                 # print RAG model
         print_rag_model(self, retriever_config, reranker_config, generator_config)
-    def eval(self, dataset_split):
 
+        
+    def eval(self, dataset_split):
         dataset = self.datasets[dataset_split]
         query_dataset_name = self.datasets[dataset_split]['query'].name
         doc_dataset_name = self.datasets[dataset_split]['doc'].name
@@ -178,7 +180,7 @@ class RAG:
                  doc_dataset_name,
                  dataset_split, 
                  retrieve_top_k,
-                 eval_ranking=True,
+                 eval_ranking=False,
                  ):
         
         ranking_file = get_ranking_filename(
@@ -233,7 +235,8 @@ class RAG:
                query_ids, 
                doc_ids, 
                rerank_top_k, 
-               return_embeddings=False
+               return_embeddings=False,
+               eval_ranking=False
                ):
         
         doc_ids = [doc_ids_q[:rerank_top_k] for doc_ids_q in doc_ids]
@@ -263,21 +266,22 @@ class RAG:
             # copy reranking file to experiment folder 
             shutil.copyfile(reranking_file, f'{self.experiment_folder}/{reranking_file.split("/")[-1]}')
             query_ids, doc_ids, scores = load_trec(reranking_file)
-        if 'ranking_label' in self.datasets[dataset_split]['query'].features:
-            print('Evaluating retrieval...')
-            wiki_doc_ids = [get_by_id(dataset['doc'], doc_ids_q, 'wikipedia_id') for doc_ids_q in doc_ids]
-            eval_retrieval_kilt(
-                self.experiment_folder, 
-                self.qrels_folder, 
-                query_dataset_name, 
-                dataset_split, 
-                query_ids, 
-                wiki_doc_ids, 
-                scores, 
-                top_k=self.generation_top_k, 
-                reranking=True, 
-                debug=self.debug
-                )
+        if eval_ranking:
+            if 'ranking_label' in self.datasets[dataset_split]['query'].features:
+                print('Evaluating retrieval...')
+                wiki_doc_ids = [get_by_id(dataset['doc'], doc_ids_q, 'wikipedia_id') for doc_ids_q in doc_ids]
+                eval_retrieval_kilt(
+                    self.experiment_folder, 
+                    self.qrels_folder, 
+                    query_dataset_name, 
+                    dataset_split, 
+                    query_ids, 
+                    wiki_doc_ids, 
+                    scores, 
+                    top_k=self.generation_top_k, 
+                    reranking=True, 
+                    debug=self.debug
+                    )
         return query_ids, doc_ids, scores
 
 
@@ -354,7 +358,11 @@ class RAG:
         from transformers import Trainer
         from modules.dataset import Tokenized_Sorted_Dataset
         from torch.utils.data import DataLoader
+        from accelerate import Accelerator
+        from utils import set_seed
+        accelerator = Accelerator()
 
+        
         dataset_split = 'train'
         dataset = self.datasets[dataset_split] 
         query_dataset_name = dataset['query'].name
@@ -387,6 +395,9 @@ class RAG:
         # get top-k docs
         doc_ids = [doc_ids_q[:self.generation_top_k] for doc_ids_q in doc_ids] if doc_ids != None else doc_ids
 
+        query_ids = query_ids
+        doc_ids = doc_ids
+
         # prepare dataset
         gen_dataset = prepare_dataset_from_ids(
             dataset, 
@@ -396,12 +407,15 @@ class RAG:
             )
         # split train into train and test
         train_test_datasets = gen_dataset.train_test_split(self.training_config.test_size_ratio, seed=42)
-
-        print("Preprocessing data...")
-        train_test_datasets['train'] = Tokenized_Sorted_Dataset(train_test_datasets['train'], self.generator.model, training=True)
-        train_test_datasets['test'] = Tokenized_Sorted_Dataset(train_test_datasets['test'], self.generator.model, training=False)
-        call_back_data = Tokenized_Sorted_Dataset(train_test_datasets['test'], self.generator.model, training=False)
-        call_back_data_select = DataLoader(call_back_data.select(range(self.training_config.generate_test_samples)), batch_size=self.training_config.trainer.per_device_eval_batch_size, collate_fn=lambda l: self.generator.model.collate_fn(l, eval=True))
+        if isinstance(self.generator.model, COCOMLLM):
+            print("Preprocessing data...")
+            #call_back_data_select = DataLoader(train_test_datasets['test'].select(range(self.training_config.generate_test_samples)), batch_size=self.training_config.trainer.per_device_eval_batch_size, collate_fn=lambda l: self.generator.model.collate_fn(l, eval=True))
+        else:
+            print("Preprocessing data...")
+            train_test_datasets['train'] = Tokenized_Sorted_Dataset(train_test_datasets['train'], self.generator.model, training=True)
+            train_test_datasets['test'] = Tokenized_Sorted_Dataset(train_test_datasets['test'], self.generator.model, training=False)
+            call_back_data = Tokenized_Sorted_Dataset(train_test_datasets['test'], self.generator.model, training=False)
+            call_back_data_select = DataLoader(call_back_data.select(range(self.training_config.generate_test_samples)), batch_size=self.training_config.trainer.per_device_eval_batch_size, collate_fn=lambda l: self.generator.model.collate_fn(l, eval=True))
 
         print("Data preprocessed")
 
@@ -418,14 +432,12 @@ class RAG:
             self.generator.model.model = get_peft_model(self.generator.model.model, lora_config)
             self.generator.model.model.print_trainable_parameters()
 
-
-
-        total_batch_size = self.training_config.trainer.per_device_train_batch_size * torch.cuda.device_count()
-        total_steps = len(train_test_datasets['train']) // total_batch_size
-        num_saving_steps = 5
+        total_batch_size = self.training_config.trainer.per_device_train_batch_size * torch.cuda.device_count() * self.training_config.trainer.gradient_accumulation_steps
+        total_steps = len(train_test_datasets['train']) * self.training_config.trainer.num_train_epochs // total_batch_size
+        num_saving_steps = 2
         eval_steps =  max(total_steps// num_saving_steps, 1)
         save_steps = max(total_steps  // num_saving_steps, 1)
-        logging_steps = max(total_steps // 5, 1)
+        logging_steps = max((total_steps // num_saving_steps) // 2, 1)
 
 
         args = TrainingArguments(
@@ -438,8 +450,11 @@ class RAG:
             logging_steps=logging_steps,
             load_best_model_at_end=True,
             remove_unused_columns=False,
+            ddp_find_unused_parameters=False,
         )
 
+        
+        set_seed(42)
         trainer = RAGTrainer(
             model=self.generator.model.model,
             model_prediction_step=self.generator.model.prediction_step,
@@ -448,9 +463,95 @@ class RAG:
             data_collator=self.generator.model.collate_fn,
             train_dataset=train_test_datasets['train'],
             eval_dataset=train_test_datasets['test'],
-            call_back_data=call_back_data_select
         )
+        model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(trainer.model, trainer.optimizer,
+                                                                              trainer.get_train_dataloader(),
+                                                                              trainer.get_eval_dataloader())
+
         trainer.train()
         self.generator.model.model = trainer.model
-        move_finished_experiment(self.experiment_folder)
+
+        if accelerator.is_main_process:
+            move_finished_experiment(self.experiment_folder)
         self.experiment_folder = get_finished_experiment_name(self.experiment_folder)
+
+
+
+
+    # def cocom_tune(self):
+    #     from transformers import TrainingArguments
+    #     import torch
+    #     from transformers import Trainer
+
+    #     dataset_split = 'train'
+    #     dataset = self.datasets[dataset_split]
+    #     query_dataset_name = dataset['query'].name
+    #     doc_dataset_name = dataset['doc'].name
+
+    #     # if no retriever don't load doc embeddings
+    #     if self.retriever != None:
+    #         query_ids, doc_ids, _ = self.retrieve(
+    #             dataset,
+    #             query_dataset_name,
+    #             doc_dataset_name,
+    #             dataset_split,
+    #             self.retrieve_top_k,
+    #             eval_ranking=False
+    #         )
+    #     else:
+    #         query_ids, doc_ids = None, None
+
+    #     if self.reranker != None:
+    #         query_ids, doc_ids, _ = self.rerank(
+    #             dataset,
+    #             query_dataset_name,
+    #             doc_dataset_name,
+    #             dataset_split,
+    #             query_ids,
+    #             doc_ids,
+    #             self.rerank_top_k,
+    #         )
+    #     gen_dataset = prepare_dataset_from_ids(
+    #         dataset,
+    #         query_ids,
+    #         doc_ids,
+    #         multi_doc=True,
+    #     )
+    #     # split train into train and test
+    #     train_test_datasets = gen_dataset.train_test_split(self.training_config.test_size_ratio, seed=42)
+
+    #     total_batch_size = self.training_config.trainer.per_device_train_batch_size * torch.cuda.device_count()
+    #     total_steps = len(train_test_datasets['train']) // total_batch_size
+    #     num_saving_steps = 5
+    #     eval_steps = max(total_steps // num_saving_steps, 1)
+    #     save_steps = max(total_steps // num_saving_steps, 1)
+    #     logging_steps = max(total_steps // 5, 1)
+
+    #     training_args = TrainingArguments(
+    #         run_name=self.run_name,
+    #         output_dir=f'{self.experiment_folder}/train/',
+    #         **self.training_config.trainer,
+    #         evaluation_strategy="steps",
+    #         eval_steps=eval_steps,
+    #         save_steps=save_steps,
+    #         logging_steps=logging_steps,
+    #         load_best_model_at_end=True,
+    #         remove_unused_columns=False,
+    #     )
+
+
+    #     trainer = Trainer(
+    #         model=self.generator.model,
+    #         args=training_args,
+    #         data_collator=self.generator.model.collate_fn,
+    #         train_dataset=train_test_datasets['train'],
+    #         eval_dataset=train_test_datasets['test']
+    #     )
+
+    #     trainer.train()
+    #     self.generator.model = trainer.model
+    #     move_finished_experiment(self.experiment_folder)
+    #     self.experiment_folder = get_finished_experiment_name(self.experiment_folder)
+    #     return self.experiment_folder
+
+

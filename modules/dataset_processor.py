@@ -139,15 +139,13 @@ class BIOASQ11B(Processor):
     
 class TimeSensitiveQA(Processor):
 
-    def __init__(self,  *args, **kwargs):
+    def __init__(self, data_path, *args, **kwargs):
         self.dataset_name = 'TimeSensitiveQA'
-        #self.path = data_path
+        self.path = data_path
         super().__init__(*args, **kwargs, dataset_name=self.dataset_name)
     
     def process(self):
-        hf_name = "diwank/time-sensitive-qa"
-        #dataset = datasets.load_dataset("json", data_files=[self.path])[self.split]
-        dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc)[self.split]
+        dataset = datasets.load_dataset("json", data_files=[self.path])[self.split]
         #['id','docs','question','type','ideal_answer','exact_answer','snippets']
         dataset = dataset.map(lambda example: {'label': example['targets']})
         dataset = dataset.rename_column("question", "content")
@@ -197,22 +195,14 @@ class SCIQ(Processor):
     def process(self):
         hf_name = 'sciq' 
         dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc)[self.split]
-        
-        ###dataset = dataset.map(lambda example: {'label': [example['correct_answer']]})
-        #dataset = dataset.remove_columns(["correct_answer","distractor1", "distractor2","distractor3","support"])
+        dataset = dataset.rename_column("question", "content")
+        #dataset = dataset.rename_column("correct_answer", "label")
+        dataset = dataset.map(lambda example: {'label': [example['correct_answer']]})
+        dataset = dataset.remove_columns(["correct_answer","distractor1", "distractor2","distractor3","support"])
         #generating the id, train_0 ... validation_0 validation_1
         cid= [self.split+str(i) for i in range(len(dataset))]
         dataset = dataset.add_column("id", cid)
-        if self.oracle_provenance:
-            # document
-            dataset = dataset.rename_column('support','content')
-            dataset = dataset.remove_columns(["question","correct_answer","distractor1", "distractor2","distractor3"])            
-            #dataset = datasets.Dataset.from_dict({'content': paragraphs, 'id': ids})
-        else:
-            # query
-            dataset = dataset.rename_column("question", "content")
-            dataset = dataset.map(lambda example: {'label': [example['correct_answer']]})
-            dataset = dataset.remove_columns(["support","correct_answer","distractor1", "distractor2","distractor3"])        
+
         return dataset
 
 
@@ -473,6 +463,16 @@ class KILTNQ(Processor):
         dataset = dataset.map(lambda example: {'ranking_label': [[provenance['wikipedia_id'] for provenance in el['provenance']] if len(el['answer']) > 0 and len(el['provenance']) > 0 else [] for el in example['output']]})
         dataset = dataset.rename_column("input", "content")
         dataset = dataset.remove_columns(['meta', 'output'])
+        return dataset
+
+class KILTCOMBINEDQA(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'kilt_combined_qa'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        dataset = datasets.load_dataset("dmrau/combined_qa")[self.split]
         return dataset
 
 
@@ -874,52 +874,16 @@ class PubMed2023(Processor):
         def map_fn(example):
             example['content'] = f"{example['MedlineCitation']['Article']['ArticleTitle']}: {example['MedlineCitation']['Article']['Abstract']['AbstractText']}"
             example['id'] = str(example['MedlineCitation']['PMID'])
+            #example['ArticleIdList'] = example['PubmedData']['ArticleIdList']
             return example
         
         dataset = dataset.map(map_fn, num_proc=self.num_proc)
         dataset = dataset.remove_columns(['MedlineCitation', 'PubmedData'])
         return dataset
-
-class Wikipedia2023_section(Processor):
-
-    def __init__(self, *args, **kwargs):
-        self.dataset_name = 'wikipedia-2023-section'
-        super().__init__(*args, **kwargs, dataset_name=self.dataset_name)
     
-    def process(self):
-        hf_name = 'rasdani/cohere-wikipedia-2023-11-en'  #from Cohere/wikipedia-2023-11-embed-multilingual-v3 w/o embeddings
-        dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc)[self.split]
-                
-        def map_fn(example):
-            example['content'] = f"{example['title']}: {example['text']}"
-            return example
-        
-        dataset = dataset.map(map_fn, num_proc=self.num_proc)
-        dataset = dataset.remove_columns(['text', 'title'])
-        dataset = dataset.rename_column("_id", "id")
-        return dataset    
     
 
 
-class Wikipedia2023_full(Processor):
-
-    def __init__(self, *args, **kwargs):
-        self.dataset_name = 'wikipedia-2023-full'
-        super().__init__(*args, **kwargs, dataset_name=self.dataset_name)
-    
-    def process(self):
-        hf_name = 'wikimedia/wikipedia'
-        dataset = datasets.load_dataset(hf_name, '20231101.en',num_proc=self.num_proc)[self.split]
-                
-        def map_fn(example):
-            example['content'] = f"{example['title']}: {example['text']}"
-            return example
-        
-        dataset = dataset.map(map_fn, num_proc=self.num_proc)
-        dataset = dataset.remove_columns(['id','text', 'title'])
-        dataset = dataset.rename_column("url", "id")
-        return dataset    
-    
 
  
 class MsMarcoCollection(Processor):

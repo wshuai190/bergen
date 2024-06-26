@@ -1,0 +1,11 @@
+init_args: 
+  _target_: models.generators.llm_cocom.COCOMLLM
+  model_name: "cocom"
+  decoder_model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  compr_model_name: null
+  max_new_tokens: 128
+  sep: True
+  compr_rate: 64
+  compr_linear_type: 'concat'
+  quantization: 'int4'
+batch_size: 12

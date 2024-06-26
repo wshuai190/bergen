@@ -20,14 +20,14 @@ class Tokenized_Sorted_Dataset(Dataset):
             for item in tqdm(data):
                 formatted_instr = self.model.format_instruction(item) + (item['label'] if isinstance(item['label'], str) else random.choice(item['label'])) + self.tokenizer.eos_token
                 item['formatted_instruction'] = formatted_instr
-                tokenized_input = self.tokenizer(formatted_instr, truncation=True, return_tensors="pt")
+                tokenized_input = self.tokenizer(formatted_instr, truncation=True, return_tensors="pt", max_length=self.model.max_length)
                 length = tokenized_input['input_ids'].size(1)  # Length of tokenized input
                 processed_data.append((length, item, tokenized_input))
         else:
             for item in tqdm(data):
                 formatted_instr = self.model.format_instruction(item)
                 item['formatted_instruction'] = formatted_instr
-                tokenized_input = self.tokenizer(formatted_instr, truncation=True, return_tensors="pt")
+                tokenized_input = self.tokenizer(formatted_instr, truncation=True, return_tensors="pt", max_length=self.model.max_length)
                 length = tokenized_input['input_ids'].size(1)
                 processed_data.append((length, item, tokenized_input))
 

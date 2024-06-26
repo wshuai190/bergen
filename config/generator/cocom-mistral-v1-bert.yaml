@@ -1,0 +1,11 @@
+init_args: 
+  _target_: models.generators.llm_cocom.COCOMLLM
+  model_name: "cocom"
+  decoder_model_name: "mistralai/Mistral-7B-v0.1"
+  compr_model_name: "google-bert/bert-base-uncased"
+  max_new_tokens: 128
+  sep: True
+  compr_rate: 64
+  compr_linear_type: 'concat'
+  quantization: 'no'
+batch_size: 24

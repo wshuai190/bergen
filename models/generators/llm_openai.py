@@ -27,7 +27,6 @@ class OpenAI(Generator):
         self.completion_cost = 0
         self.max_doc_len = max_doc_len
         self.max_length = max_length
-        self.tokenizer=None
 
     def generate(self, messages):
         responses=[]
@@ -59,11 +58,7 @@ class OpenAI(Generator):
             'gpt-4-0125-preview':{
                 'prompt': 0.01,
                 'completion': 0.03,                
-            },
-            'gpt-4o': {
-            'prompt': 0.005,  #US$5.00 / 1M tokens
-            'completion': 0.015,  #US$15.00 / 1M tokens
-            }                 
+            }
         }
 
         try:
