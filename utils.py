@@ -84,13 +84,19 @@ def get_doc_embeds_from_dataset(d_ids, embeds_dataset):
     doc_embeds = torch.stack(doc_embeds) 
 
     return doc_embeds.cpu()
-
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 # horrible function :/ needs to be refactored into mult_doc and single doc
 # gets q_ids and d_ids and does a lookup by id to get the content
 # then constructs hf_dataset out of it
 def prepare_dataset_from_ids(dataset, q_ids, d_ids, multi_doc=False, query_embeds_path=None, doc_embeds_path=None):
 
     # if query _ids and doc_ids are None only return queries and optional labels /ranking labels
+
     if q_ids == d_ids == None:
         dataset_dict = {
             'query': dataset['query']['content'], 
@@ -107,10 +113,13 @@ def prepare_dataset_from_ids(dataset, q_ids, d_ids, multi_doc=False, query_embed
         # get ranking_labels
         ranking_labels = get_by_id(dataset['query'], q_ids, 'ranking_label') 
         # get queries
+        # print(dataset['query'])
         queries = get_by_id(dataset['query'], q_ids, 'content')
+        # print(len(queries), len(q_ids))
+        # exit(0)
         # put together dataset_dict for each query
         for i, q_id in tqdm(enumerate(q_ids), desc='Fetching data from dataset...', total=len(q_ids)):
-            docs = get_by_id(dataset['doc'], d_ids[i], 'content') 
+            docs = get_by_id(dataset['doc'], d_ids[i], 'content')
             doc_idxs = get_by_id(dataset['doc'], d_ids[i])
             # for multi_doc=True, all documents are saved to the 'doc' entry
 
@@ -128,18 +137,22 @@ def prepare_dataset_from_ids(dataset, q_ids, d_ids, multi_doc=False, query_embed
                     dataset_dict['ranking_label'].append(ranking_labels[i])
             else:
                 # for multi_doc=False, we save every document to a new entry
-                    for d_id, doc, d_idx in zip(d_ids[i], docs, doc_idxs):
-                        dataset_dict['d_id'].append(d_id)
-                        dataset_dict['d_idx'].append(d_idx)
-                        dataset_dict['doc'].append(doc)
-                        dataset_dict['query'].append(queries[i])
-                        dataset_dict['q_id'].append(q_id)
-                        # add labels if they exist in datset
-                        if len(labels) > 0 :
-                            dataset_dict['label'].append(labels[i])
-                        # add ranking_labels if they exist in datset
-                        if len(ranking_labels) > 0:
-                            dataset_dict['ranking_label'].append(ranking_labels[i])
+                # try:
+                for d_id, doc, d_idx in zip(d_ids[i], docs, doc_idxs):
+                    dataset_dict['d_id'].append(d_id)
+                    dataset_dict['d_idx'].append(d_idx)
+                    dataset_dict['doc'].append(doc)
+                    dataset_dict['query'].append(queries[i])
+                    dataset_dict['q_id'].append(q_id)
+                    # add labels if they exist in datset
+                    if len(labels) > 0 :
+                        dataset_dict['label'].append(labels[i])
+                    # add ranking_labels if they exist in datset
+                    if len(ranking_labels) > 0:
+                        dataset_dict['ranking_label'].append(ranking_labels[i])
+                # except:
+                #     print(len(queries), len(d_ids), len(docs), len(doc_idxs))
+                #     print('Error in dataset', q_id, d_ids[i], docs)
 
     return datasets.Dataset.from_dict(dataset_dict)
 
@@ -211,7 +224,10 @@ def load_trec(fname):
     # read file
     trec_dict = defaultdict(list)
     for l in tqdm(open(fname), desc=f'Loading existing trec run {fname}'):
-        q_id, _, d_id, _, score, _ = l.split('\t')
+        try:
+            q_id, _, d_id, _, score, _ = l.split('\t')
+        except:
+            print(l.split('\t'))
         trec_dict[q_id].append((d_id, score))
     q_ids, d_ids, scores = list(), list(), list()
     for q_id in trec_dict:

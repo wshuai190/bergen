@@ -23,6 +23,7 @@ class CompressorConfig(PretrainedConfig):
         self.decoder_hidden_size = decoder_hidden_size
 
 class Compressor(PreTrainedModel):
+    config_class = CompressorConfig
     def __init__(self, cfg):
         super().__init__(cfg)
         # init model
