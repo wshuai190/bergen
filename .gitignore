@@ -6,3 +6,8 @@ tests/index/
 tests/exp/
 tests/run/
 config/rag-ncp.yaml
+/mistral-baseline/xrag_128
+/mistral-baseline/xrag_30
+modules/sedWI9tLD
+modules/sedXBPyUc
+models/generators/sed3rastF

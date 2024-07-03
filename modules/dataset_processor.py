@@ -476,6 +476,7 @@ class KILTCOMBINEDQA(Processor):
         return dataset
 
 
+
 class KILTTriviaqa(Processor):
 
     def __init__(self, *args, **kwargs):
@@ -750,6 +751,21 @@ class ODQAWikiCorpora100WTamber(Processor):
         dataset = dataset.map(map_fn, num_proc=self.num_proc)
         dataset = dataset.rename_column("docid", "id")
         dataset = dataset.remove_columns(['title', 'text'])
+        return dataset
+
+class KILT128w(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'kilt-128w'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        dataset = datasets.load_dataset("dmrau/kilt-128", num_proc=self.num_proc)[self.split]
+        def map_paragraphs(sample):
+            ids = sample["id"]
+            paragraphs = sample["content"]
+            return {"wiki_ids": ids, "content": paragraphs}
+        dataset = dataset.map(map_paragraphs, num_proc=self.num_proc)
         return dataset
     
 class KILT100w(Processor):

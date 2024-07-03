@@ -25,9 +25,11 @@ class COCOMLLM(Generator):
                 query_dependant = False,
                 training_form="both",
                 context_max_length=512,
+                max_length=768,
                 test_mode="ft",
                 **kwargs,
     ):
+        self.model_max_length = max_length 
         if model_name == 'cocom':
             cfg = COCOMConfig(
                 decoder_model_name=decoder_model_name,
@@ -52,19 +54,22 @@ class COCOMLLM(Generator):
 
             
         self.training_form = training_form
-        assert self.training_form in ['decoder', 'compressor', 'linear', 'both']
+        #assert self.training_form in ['decoder', 'compressor', 'linear', 'both']
         self.test_mode = test_mode
         assert self.test_mode in ['ft', 'ae']
         if self.test_mode == 'ae':
             self.model.sep = False
 
-        if self.training_form == 'decoder':
-            freeze_model(self.model.compr.model)
-        elif self.training_form == 'compressor':
-            freeze_model(self.model.decoder)
-        elif self.training_form == 'linear':
-            freeze_model(self.model.compr.model)
-            freeze_model(self.model.decoder)
+        if self.model.compr is not None:
+            if self.training_form == 'compressor':
+                freeze_model(self.model.decoder)
+        # if self.training_form == 'decoder':
+        #     freeze_model(self.model.compr.model)
+        # elif self.training_form == 'compressor':
+        #     freeze_model(self.model.decoder)
+        # elif self.training_form == 'linear':
+        #     freeze_model(self.model.compr.model)
+        #     freeze_model(self.model.decoder)
     
         self.model_name = model_name
         self.query_dependant = query_dependant
@@ -73,8 +78,8 @@ class COCOMLLM(Generator):
         self.response_token_ids = self.get_response_template_ids()
         print("Response token ids")
         print(self.response_token_ids)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
+        #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        #self.model.to(self.device)
 
     def generate(self, instr_tokenized):
         return self.model.generate(instr_tokenized, max_new_tokens=self.max_new_tokens)
@@ -130,6 +135,7 @@ class COCOMLLM(Generator):
                 mem_tokens = torch.full((inp_enc['input_ids'].size(0), num_mem_tokens), self.model.decoder_tokenizer.mem_token_id, dtype=torch.long)
                 inp_enc['input_ids'] = torch.cat([inp_enc['input_ids'], mem_tokens], dim=1)
                 inp_enc['attention_mask'] = torch.cat([inp_enc['attention_mask'], torch.ones(inp_enc['attention_mask'].size(0), num_mem_tokens)], dim=1)
+            
             # input for decoder
             # [Padding][BOS][mem][INST]{question}?[/INST]
             mem_tokens = self.model.decoder_tokenizer.mem_token * num_mem_tokens
@@ -145,7 +151,7 @@ class COCOMLLM(Generator):
                 else:
                     instr = [self.model.decoder_tokenizer.bos_token + mem_tokens * self.model.generation_top_k + '[INST]' + q + self.get_response() for q in query]
                 inp_dec = self.model.decoder_tokenizer(instr, return_tensors='pt', padding="longest", add_special_tokens=False,
-                                        truncation=True,  max_length=768)
+                                        truncation=True,  max_length=self.model_max_length)
             else:
                 if self.test_mode == 'ae':
                     # it's not possible to have ae mode for training
@@ -153,7 +159,7 @@ class COCOMLLM(Generator):
                 label = [e['label'] if isinstance(e['label'], str) else random.choice(e['label']) for e in examples]
      
                 instr = [self.model.decoder_tokenizer.bos_token + mem_tokens * self.model.generation_top_k + '[INST]' + q + self.get_response() + e + self.model.decoder_tokenizer.eos_token  for q, e in zip(query, label)]
-                inp_dec = self.model.decoder_tokenizer(instr, return_tensors='pt', padding="longest", add_special_tokens=False, truncation=True, max_length=768)
+                inp_dec = self.model.decoder_tokenizer(instr, return_tensors='pt', padding="longest", add_special_tokens=False, truncation=True, max_length=self.model_max_length)
                 label_ids = prepare_labels(inp_dec["input_ids"], self.response_token_ids[1:], ignore_index=ignore_index)
                 # print the ones that has all -100
                 for i, label_id in enumerate(label_ids):

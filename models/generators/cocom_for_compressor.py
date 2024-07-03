@@ -1,27 +1,42 @@
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, PreTrainedModel, PretrainedConfig, AutoModel
 from accelerate import init_empty_weights
 import torch
 import math 
 from peft import get_peft_model, LoraConfig, TaskType
 
-def freeze_model(model):
-    for param in model.parameters():
-        param.requires_grad = False
 
-class Compressor(torch.nn.Module):
-    def __init__(self, compr_model_name, compr_rate, compr_linear_type, decoder_hidden_size):
-        super().__init__()
-        # init model
-        self.model_name = compr_model_name
-        self.model = AutoModel.from_pretrained(compr_model_name, torch_dtype=torch.bfloat16)
-        self.tokenizer = AutoTokenizer.from_pretrained(compr_model_name, use_fast=True)
+
+class CompressorConfig(PretrainedConfig):
+
+    model_type = "compressor"
+    def __init__(self,
+                compr_model_name="bert-base-uncased",
+                compr_rate=64,
+                compr_linear_type='concat',
+                decoder_hidden_size=1024,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.compr_model_name = compr_model_name
         self.compr_rate = compr_rate
-        self.compressing_mode = compr_linear_type
+        self.compr_linear_type = compr_linear_type
+        self.decoder_hidden_size = decoder_hidden_size
+
+class Compressor(PreTrainedModel):
+    config_class = CompressorConfig
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        # init model
+        self.model_name = cfg.compr_model_name
+        self.model = AutoModel.from_pretrained(cfg.compr_model_name, torch_dtype=torch.bfloat16)
+        self.tokenizer = AutoTokenizer.from_pretrained(cfg.compr_model_name, use_fast=True)
+        self.compr_rate = cfg.compr_rate
+        self.compressing_mode = cfg.compr_linear_type
 
         if self.compressing_mode == 'concat':
-            self.linear = torch.nn.Linear(self.model.config.hidden_size*self.compr_rate, decoder_hidden_size)
+            self.linear = torch.nn.Linear(self.model.config.hidden_size*self.compr_rate, cfg.decoder_hidden_size)
         elif self.compressing_mode in ['cls', 'mean', 'sep']:
-            self.linear = torch.nn.Linear(self.model.config.hidden_size, decoder_hidden_size)
+            self.linear = torch.nn.Linear(self.model.config.hidden_size, cfg.decoder_hidden_size)
         self.linear = self.linear.bfloat16()
 
     def forward(self, input_ids, attention_mask):
@@ -56,12 +71,6 @@ class Compressor(torch.nn.Module):
 
 
         return  transformed_embeds
-    def save_pretrained(self, path):
-        #need to save the pretrained model so it 
-        self.model.save_pretrained(path)
-        self.tokenizer.save_pretrained(path)
-        torch.save(self.linear.state_dict(), path + "/linear.pt")
-
 
 class COCOMConfig(PretrainedConfig):
 
@@ -75,7 +84,6 @@ class COCOMConfig(PretrainedConfig):
                 compr_rate = 64,
                 compr_linear_type = 'concat',
                 lora = True,
-                training_form="both",
                  **kwargs):
         super().__init__(**kwargs)
 
@@ -86,7 +94,6 @@ class COCOMConfig(PretrainedConfig):
         self.compr_model_name = compr_model_name
         self.compr_rate = compr_rate
         self.compr_linear_type = compr_linear_type
-        self.training_form = training_form
         # lora could be a boolean or a str
         self.lora = lora
         if lora == "True":
@@ -100,7 +107,6 @@ class COCOM(PreTrainedModel):
     def __init__(self, cfg):
         super().__init__(cfg)
         # define models
-        self.training_form = cfg.training_form
         if cfg.quantization == "no":
             with init_empty_weights():
                 self.decoder = AutoModelForCausalLM.from_pretrained(
@@ -147,7 +153,13 @@ class COCOM(PreTrainedModel):
             raise NotImplementedError()
         
         if cfg.compr_model_name is not None:
-            self.compr = Compressor(cfg.compr_model_name, cfg.compr_rate, cfg.compr_linear_type, self.decoder.config.hidden_size)
+            compressor_config = CompressorConfig(
+                compr_model_name=cfg.compr_model_name,
+                compr_rate=cfg.compr_rate,
+                compr_linear_type=cfg.compr_linear_type,
+                decoder_hidden_size=self.decoder.config.hidden_size,
+            )
+            self.compr = Compressor(compressor_config)
             #self.compr_pad_token_id = self.compr.pad_token_id
         else:
             self.compr = None
@@ -164,8 +176,6 @@ class COCOM(PreTrainedModel):
             self.decoder = get_peft_model(self.decoder, peft_config)
             self.decoder.print_trainable_parameters()  
 
-        if cfg.training_form == "compressor" and self.compr is not None:
-            freeze_model(self.decoder)
 
         self.decoder_tokenizer = AutoTokenizer.from_pretrained(cfg.decoder_model_name, use_fast=True, padding_side='left')
 
@@ -223,9 +233,6 @@ class COCOM(PreTrainedModel):
         batch_size = inputs_embeds.size(0)
         # for each example in batch
         for i in range(batch_size):
-            if i == len(indices)-1:
-                print(len(compressed_embs))
-                break
             for j in range(indices[i], indices[i + 1]):
                 start_idx = first_mem_token_indices[i].item() + (j-indices[i]) * slot_len
                 inputs_embeds[i, start_idx:start_idx + num_embs, :] = compressed_embs[j]
@@ -240,11 +247,7 @@ class COCOM(PreTrainedModel):
         labels: torch.LongTensor = None, 
         ):
         inputs_embeds = self.compress_and_replace_emb(enc_input_ids, enc_attention_mask, dec_input_ids)
-        if (self.training_form == "compressor") and (self.compr is None):
-            inputs_embeds  = inputs_embeds.detach()
-
         decoder_outputs = self.decoder(inputs_embeds=inputs_embeds, attention_mask=dec_attention_mask, labels=labels)
-
         return {"loss": decoder_outputs.loss, "logits": decoder_outputs.logits}
 
 

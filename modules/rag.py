@@ -7,9 +7,11 @@ CC BY-NC-SA 4.0 license
 from modules.retrieve import Retrieve
 from modules.rerank import Rerank
 from modules.generate import Generate
+from transformers.trainer_utils import get_last_checkpoint
 from modules.dataset_processor import ProcessDatasets
 from modules.metrics import RAGMetrics
 from models.generators.llm_cocom import COCOMLLM
+from models.generators.llm_icae import LLMICAE
 import time 
 import shutil
 import os 
@@ -196,6 +198,7 @@ class RAG:
                 #raise NotImplementedError('For returning Embeddings is not yet fully implemented!')
         doc_embeds_path = get_index_path(self.index_folder, doc_dataset_name, self.retriever.get_clean_model_name(), 'doc')
         query_embeds_path = get_index_path(self.index_folder, query_dataset_name, self.retriever.get_clean_model_name(), 'query', dataset_split=dataset_split)
+        print("current ranking file is:" + ranking_file)
         if not os.path.exists(ranking_file) or self.overwrite_exp or self.overwrite_index:
             print(f'Run {ranking_file} does not exists, running retrieve...')
              # retrieve
@@ -251,7 +254,7 @@ class RAG:
             self.reranker.get_clean_model_name(),
             self.rerank_top_k,
         )
-
+        print("current reranking file is:" + reranking_file)
         if not os.path.exists(reranking_file) or self.overwrite_exp:
             rerank_dataset = prepare_dataset_from_ids(
                     dataset, 
@@ -391,6 +394,7 @@ class RAG:
                 doc_ids,
                 self.rerank_top_k,
                 )
+        
 
         # get top-k docs
         doc_ids = [doc_ids_q[:self.generation_top_k] for doc_ids_q in doc_ids] if doc_ids != None else doc_ids
@@ -439,18 +443,24 @@ class RAG:
         save_steps = max(total_steps  // num_saving_steps, 1)
         logging_steps = max((total_steps // num_saving_steps) // 2, 1)
 
+        print("total_steps", total_steps)
+
+        find_parameters = False
+        if isinstance(self.generator.model, COCOMLLM):
+            find_parameters = True
+            print("Using COCOMLLM")
 
         args = TrainingArguments(
             run_name=self.run_name,
             output_dir=f'{self.experiment_folder}/train/',
             **self.training_config.trainer,
             evaluation_strategy="steps",
-            eval_steps=eval_steps, 
+            eval_steps= eval_steps,
             save_steps=save_steps,
             logging_steps=logging_steps,
             load_best_model_at_end=True,
             remove_unused_columns=False,
-            ddp_find_unused_parameters=False,
+            ddp_find_unused_parameters=find_parameters,
         )
 
         
@@ -463,12 +473,29 @@ class RAG:
             data_collator=self.generator.model.collate_fn,
             train_dataset=train_test_datasets['train'],
             eval_dataset=train_test_datasets['test'],
+
         )
         model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(trainer.model, trainer.optimizer,
                                                                               trainer.get_train_dataloader(),
                                                                               trainer.get_eval_dataloader())
+        last_checkpoint = None
+        if os.path.isdir(args.output_dir) and not args.overwrite_output_dir:
+            last_checkpoint = get_last_checkpoint(args.output_dir)
+            if last_checkpoint is not None and args.resume_from_checkpoint is None:
+                print(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+                )
 
-        trainer.train()
+        if args.resume_from_checkpoint is not None:
+            checkpoint = args.resume_from_checkpoint
+        elif last_checkpoint is not None:
+            checkpoint = last_checkpoint
+        else:
+            checkpoint = None
+        print(f"Loaded from the checkpoint: {checkpoint}")
+
+        trainer.train(resume_from_checkpoint=checkpoint)
         self.generator.model.model = trainer.model
 
         if accelerator.is_main_process:
@@ -551,7 +578,4 @@ class RAG:
     #     trainer.train()
     #     self.generator.model = trainer.model
     #     move_finished_experiment(self.experiment_folder)
-    #     self.experiment_folder = get_finished_experiment_name(self.experiment_folder)
-    #     return self.experiment_folder
-
-
+    #     self.experiment_folder = get

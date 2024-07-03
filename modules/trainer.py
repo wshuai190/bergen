@@ -4,6 +4,7 @@ Copyright (c) 2024-present NAVER Corp.
 CC BY-NC-SA 4.0 license
 '''
 
+from trl import SFTTrainer
 from transformers import Trainer
 import torch
 from torch.utils.data import DataLoader
@@ -15,19 +16,19 @@ class RAGTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         model_prediction_step = kwargs.pop('model_prediction_step')
         model_generate = kwargs.pop('generate')
-        call_back_data = kwargs.pop('call_back_data')
+        #call_back_data = kwargs.pop('call_back_data')
         super().__init__(*args, **kwargs)
         self.model_prediction_step = model_prediction_step
-        if self.args.report_to =="wandb":
-            #write sample  generation to wandb
-            progress_callback = WandbPredictionProgressCallback(
-                trainer=self,
-                tokenizer=self.tokenizer,
-                generation_step= model_generate,
-                dataloader=call_back_data,
-            )
-            # Add the callback to the trainer
-            self.add_callback(progress_callback)
+        # if self.args.report_to =="wandb":
+        #     #write sample  generation to wandb
+        #     progress_callback = WandbPredictionProgressCallback(
+        #         trainer=self,
+        #         tokenizer=self.tokenizer,
+        #         generation_step= model_generate,
+        #         dataloader=call_back_data,
+        #     )
+        #     # Add the callback to the trainer
+        #     self.add_callback(progress_callback)
 
     def compute_loss(self, model, inputs):
         model_input, label_ids = inputs['model_input'], inputs['label_ids']
