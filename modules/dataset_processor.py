@@ -356,7 +356,7 @@ class POPQA(Processor):
         dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc)[self.split]
         dataset = dataset.rename_column("question", "content")
         dataset = dataset.map(lambda example: {'label': eval(example['possible_answers'])})
-        dataset = dataset.remove_columns(["possible_answers","id","subj", "prop","obj","subj_id","prop_id",'obj_id','s_aliases','o_aliases','s_uri','o_uri','s_wiki_title','o_wiki_title','s_pop','o_pop'])
+        dataset = dataset.remove_columns(["possible_answers","id","subj", "prop","obj","subj_id","prop_id",'obj_id','s_aliases','o_aliases','s_uri','o_uri','s_wiki_title','o_wiki_title','s_pop'])
         #generating the id, train_0 ... validation_0 validation_1
         cid= [self.split+str(i) for i in range(len(dataset))]
         dataset = dataset.add_column("id", cid)

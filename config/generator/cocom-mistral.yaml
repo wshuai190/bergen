@@ -5,7 +5,8 @@ init_args:
   compr_model_name: null
   max_new_tokens: 128
   sep: True
-  compr_rate: 64
+  compr_rate: 128
   compr_linear_type: 'concat'
   quantization: 'no'
-batch_size: 24
+  lora: true
+batch_size: 6

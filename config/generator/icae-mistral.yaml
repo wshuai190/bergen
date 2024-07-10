@@ -1,0 +1,6 @@
+init_args: 
+  _target_: models.generators.llm_icae.LLMICAE
+  model_name: "icae"
+  decoder_model_name: "mistralai/Mistral-7B-v0.1"
+  max_new_tokens: 128
+batch_size: 24

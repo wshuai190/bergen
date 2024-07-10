@@ -25,11 +25,32 @@ class COCOMLLM(Generator):
                 query_dependant = False,
                 training_form="both",
                 context_max_length=512,
-                max_length=768,
-                test_mode="ft",
+                max_length=1280,
+                test_mode="ft", # either ft or ae, ae is for autoencoding, ft is for fine-tune tasks
                 **kwargs,
     ):
-        self.model_max_length = max_length 
+        """
+            Initializes the COCOMLLM class.
+        
+            Args:
+                model_name (str): Name of the model to be used. If 'cocom', a new model is created.
+                decoder_model_name (str): Name of the decoder model.
+                max_new_tokens (int): Maximum number of new tokens to be generated.
+                quantization (str): Quantization type.
+                generation_top_k (int): Top k tokens to consider during generation.
+                sep (bool): Whether to use a separator token.
+                compr_model_name (str): Name of the compression model.
+                compr_rate (int): Compression rate.
+                compr_linear_type (str): Type of linear compression.
+                lora (bool): Whether to use LoRA.
+                query_dependant (bool): Whether the compression is query dependant.
+                training_form (str): Specifies the part of the model to train ('decoder', 'compressor', 'linear', 'both').
+                context_max_length (int): Maximum length of the context.
+                max_length (int): Maximum length of the input.
+                test_mode (str): Test mode, either 'ft' for fine-tuning or 'ae' for autoencoding.
+                **kwargs: Additional keyword arguments.
+        """
+        # load a new model if model_name is cocom, othwewise from a pretriained checkpoint
         if model_name == 'cocom':
             cfg = COCOMConfig(
                 decoder_model_name=decoder_model_name,
@@ -44,17 +65,14 @@ class COCOMLLM(Generator):
                 )
             self.model = COCOM(cfg)
         else:
+
             self.model = COCOM.from_pretrained(model_name, ignore_mismatched_sizes=True)
-            # if self.model.lora:
-            #     self.model.decoder.merge_and_unload()
             self.model.sep = sep
             self.model.generation_top_k = generation_top_k
             self.model.max_new_tokens = max_new_tokens
-            
-
-            
+        
         self.training_form = training_form
-        #assert self.training_form in ['decoder', 'compressor', 'linear', 'both']
+        assert self.training_form in ['decoder', 'compressor', 'linear', 'both']
         self.test_mode = test_mode
         assert self.test_mode in ['ft', 'ae']
         if self.test_mode == 'ae':
@@ -63,25 +81,19 @@ class COCOMLLM(Generator):
         if self.model.compr is not None:
             if self.training_form == 'compressor':
                 freeze_model(self.model.decoder)
-        # if self.training_form == 'decoder':
-        #     freeze_model(self.model.compr.model)
-        # elif self.training_form == 'compressor':
-        #     freeze_model(self.model.decoder)
-        # elif self.training_form == 'linear':
-        #     freeze_model(self.model.compr.model)
-        #     freeze_model(self.model.decoder)
-    
         self.model_name = model_name
         self.query_dependant = query_dependant
         self.max_new_tokens = max_new_tokens
         self.context_max_length = context_max_length
+        self.model_max_length = max_length 
         self.response_token_ids = self.get_response_template_ids()
         print("Response token ids")
         print(self.response_token_ids)
-        #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        #self.model.to(self.device)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
 
     def generate(self, instr_tokenized):
+        # generate based on input from collate function
         return self.model.generate(instr_tokenized, max_new_tokens=self.max_new_tokens)
     
     def get_response(self):
@@ -93,16 +105,30 @@ class COCOMLLM(Generator):
         
 
     def prediction_step(self, model, model_input, label_ids=None):
+        # used for training
         output = model.forward(**model_input, labels=label_ids)
         return output['logits'], output['loss']
     
     def collate_fn(self, examples,  eval=False, **kwargs):
+            """
+            Collates a batch of examples.
+            
+            Args:
+                examples (list): batch from dataset
+                eval (bool): Whether the function is being called for evaluation.
+                **kwargs: Additional keyword arguments.
+            
+            Returns:
+                dict: Collated batch of data.
+            """
             ignore_index = -100
             q_ids = [e['q_id'] for e in examples]
             query = [e['query'] for e in examples]
   
             ranking_label = [e['ranking_label'] for e in examples] if 'ranking_label' in examples[0] else [None] * len(examples)
-            docs = sum([example['doc'] for example in examples], [])
+            docs = sum([example['doc'] for example in examples], []) # flatten all the docs for encoder input
+ 
+            # first to prepare encoder input
             if self.model.compr is not None:
                 # case bert-compressor
                 if self.query_dependant:
@@ -119,18 +145,10 @@ class COCOMLLM(Generator):
                     query_combined = [q for q in query for _ in range(self.model.generation_top_k)]
                     docs = [q + self.model.decoder_tokenizer.sep_token + d for q, d in zip(query_combined, docs)]
                  
-                if self.test_mode == 'ae':
-                    inp_enc = [self.model.decoder_tokenizer.enc_token + self.model.decoder_tokenizer.bos_token + doc for doc in docs]
-                    inp_enc = self.model.decoder_tokenizer(inp_enc, return_tensors='pt', padding="longest", max_length=self.context_max_length+2, truncation=True, add_special_tokens=False)
-                    eos_tokens = torch.full((inp_enc['input_ids'].size(0), 1), self.model.decoder_tokenizer.eos_token_id, dtype=torch.long)
-                    inp_enc['input_ids'] = torch.cat([inp_enc['input_ids'], eos_tokens], dim=1)
-                    inp_enc['attention_mask'] = torch.cat([inp_enc['attention_mask'], torch.ones(inp_enc['attention_mask'].size(0), 1)], dim=1)
-                    num_mem_tokens = math.ceil((inp_enc['input_ids'].size(1)- 3) / self.model.compr_rate)
-                else:
-                    inp_enc = [self.model.decoder_tokenizer.enc_token + self.model.decoder_tokenizer.bos_token + doc + self.model.decoder_tokenizer.eos_token for doc in docs]
-                    inp_enc = self.model.decoder_tokenizer(inp_enc, return_tensors='pt', padding="longest", max_length=self.context_max_length+3, truncation=True, add_special_tokens=False)
-                    num_mem_tokens = math.ceil((inp_enc['input_ids'].size(1)- 3) / self.model.compr_rate)
-            
+                inp_enc = [self.model.decoder_tokenizer.enc_token + self.model.decoder_tokenizer.bos_token + doc + self.model.decoder_tokenizer.eos_token for doc in docs]
+                inp_enc = self.model.decoder_tokenizer(inp_enc, return_tensors='pt', padding="longest", max_length=self.context_max_length+3, truncation=True, add_special_tokens=False)
+                num_mem_tokens = math.ceil((inp_enc['input_ids'].size(1)- 3) / self.model.compr_rate)
+        
                 # append memory tokens to the input
                 mem_tokens = torch.full((inp_enc['input_ids'].size(0), num_mem_tokens), self.model.decoder_tokenizer.mem_token_id, dtype=torch.long)
                 inp_enc['input_ids'] = torch.cat([inp_enc['input_ids'], mem_tokens], dim=1)
@@ -190,4 +208,3 @@ class COCOMLLM(Generator):
                 'ranking_label': ranking_label,
             })
             return data_dict
-           
