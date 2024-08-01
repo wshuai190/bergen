@@ -712,6 +712,19 @@ class MsMarcoQueries(Processor):
         dataset = datasets.Dataset.from_dict({"id":ids, "content": queries})  # no need for split?
         return dataset
 
+class MsMarcoDevQueries(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'ms-marco-dev-queries'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        queries_d = "/scratch/project/neural_ir/dylan/msmarco_v2.1/msmarco_dev/topics.msmarco-v2-doc.dev.txt"  # super hard-coded path, see how to do properly
+        with open(queries_d) as f:
+            ids, queries = zip(*[line.strip().split("\t") for line in f])
+        dataset = datasets.Dataset.from_dict({"id":ids, "content": queries})  # no need for split?
+        return dataset
+
 # ---------------------------------------- #
 # Document processors
 # ---------------------------------------- #
@@ -767,7 +780,18 @@ class KILT128w(Processor):
             return {"wiki_ids": ids, "content": paragraphs}
         dataset = dataset.map(map_paragraphs, num_proc=self.num_proc)
         return dataset
-    
+
+class MSMARCOV21SEG(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'msmarco_2.1_segmented'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        dataset = datasets.load_dataset("ielabgroup/msmarco_v2.1_doc_segmented_dataset", num_proc=self.num_proc)
+
+        return dataset
+
 class KILT100w(Processor):
 
     def __init__(self, *args, **kwargs):

@@ -166,6 +166,7 @@ class Retrieve:
         print(num_emb)
         print(dataset_size)
         if num_emb != dataset_size:
+            print(doc_embeds_path)
             raise IOError(f'!!! Index is not complete. Please re-index. Missing {dataset_size-num_emb} documents in the index. !!!')
 
         # Concatenate top-k scores and indices from each chunk

@@ -140,9 +140,13 @@ class LLM(Generator):
 
         input_ids_list = [e["tokenized_input"]["input_ids"][0] for e in examples]
         attention_mask_list = [e["tokenized_input"]["attention_mask"][0] for e in examples]
-
-        label = [[e['label']] if isinstance(e['label'], str) else e['label'] for e in examples]
+        if "label" in examples[0]:
+            label = [[e['label']] if isinstance(e['label'], str) else e['label'] for e in examples]
+        else:
+            label = [[""]] * len(examples)
         query = [e['query'] for e in examples]
+
+
         ranking_label = [e['ranking_label'] for e in examples] if 'ranking_label' in examples[0] else [None] * len(examples)
         instr = [e["formatted_instruction"] for e in examples]
 
