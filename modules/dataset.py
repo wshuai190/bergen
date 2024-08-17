@@ -16,6 +16,7 @@ class Tokenized_Sorted_Dataset(Dataset):
 
         # Preprocess, tokenize and store lengths
         processed_data = []
+        length_all_list = []
         if self.training:
             for item in tqdm(data):
                 formatted_instr = self.model.format_instruction(item) + (item['label'] if isinstance(item['label'], str) else random.choice(item['label'])) + self.tokenizer.eos_token
@@ -30,8 +31,11 @@ class Tokenized_Sorted_Dataset(Dataset):
                 tokenized_input = self.tokenizer(formatted_instr, truncation=True, return_tensors="pt", max_length=self.model.max_length)
                 length = tokenized_input['input_ids'].size(1)
                 processed_data.append((length, item, tokenized_input))
+                length_all_list.append(length)
+
 
             # Sort by tokenized input length
+        print("Average length of tokenized input: ", sum(length_all_list) / len(length_all_list))
         self.sorted_data = sorted(processed_data, key=lambda x: x[0])
 
 

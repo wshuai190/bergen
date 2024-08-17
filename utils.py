@@ -227,7 +227,8 @@ def load_trec(fname):
         try:
             q_id, _, d_id, _, score, _ = l.split('\t')
         except:
-            print(l.split('\t'))
+            q_id, _, d_id, _, score, _ = l.split()
+
         trec_dict[q_id].append((d_id, score))
     q_ids, d_ids, scores = list(), list(), list()
     for q_id in trec_dict:
@@ -333,11 +334,17 @@ def get_reranking_filename(runs_folder, query_dataset, doc_dataset, dataset_spli
     return f'{runs_folder}/run.rerank.retriever.top_{retrieve_top_k}.{retriever_name}.rerank.top_{rerank_top_k}.{query_dataset}.{doc_dataset}.{dataset_split}.{reranker_name}.trec'
 
 def get_ranking_filename(runs_folder, query_dataset, doc_dataset, retriever_name, dataset_split, retrieve_top_k):
+
     if retriever_name == 'oracle_provenance':
         return get_oracle_ranking_filename(runs_folder, query_dataset, dataset_split)
+    elif "custom" in retriever_name:
+        return get_custom_ranking_filename(runs_folder, retriever_name, query_dataset, doc_dataset)
     else:
         return f'{runs_folder}/run.retrieve.top_{retrieve_top_k}.{query_dataset}.{doc_dataset}.{dataset_split}.{retriever_name}.trec'
-        
+
+def get_custom_ranking_filename(runs_folder, retriever_name, query_dataset, doc_dataset):
+    return f'{runs_folder}/custom/{query_dataset}.{retriever_name}.{doc_dataset}.trec'
+
 def get_embedding_datasets_path(embeddings_path):
     embeddings_path = embeddings_path.rstrip('/')
     return f'{embeddings_path}.hf'

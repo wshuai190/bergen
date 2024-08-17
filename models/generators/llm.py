@@ -19,7 +19,7 @@ class LLM(Generator):
     def __init__(self, 
                 model_name=None, 
                 max_new_tokens=1, 
-                max_doc_len=100,
+                max_doc_len=512,
                 max_length=None,
                 prompt=None,
                 quantization=None,
@@ -197,7 +197,7 @@ class LLM(Generator):
             docs = ''
             for i, doc in enumerate(sample['doc']):
                 doc = ' '.join(doc.split()[:self.max_doc_len])
-                docs += f"Document {i+1}: {doc}\n"
+                docs += f"Document [{i+1}]: {doc}\n"
             compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs)
         else:
             # without retrieval we don't put documents in the prompt

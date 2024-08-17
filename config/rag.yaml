@@ -11,7 +11,7 @@ defaults:
     
 retrieve_top_k: 50
 rerank_top_k: 50
-generation_top_k: 1
+generation_top_k: 5
 pyserini_num_threads: 2
 run_name: null
 dataset_folder: 'datasets/'

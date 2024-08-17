@@ -4,7 +4,7 @@ Copyright (c) 2024-present NAVER Corp.
 CC BY-NC-SA 4.0 license
 '''
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, AutoConfig
 import torch
 from models.generators.generator import Generator
 import random
@@ -21,7 +21,8 @@ class LLM(Generator):
                 max_doc_len=100,
                 max_length=None,
                 prompt=None,
-                quantization=None
+                quantization=None,
+                 **kwargs,
                  ):
 
 
@@ -36,9 +37,14 @@ class LLM(Generator):
         self.tokenizer.pad_token = self.tokenizer.bos_token
 
         if self.quantization is None:
-            self.model = vllm(model=self.model_name,tensor_parallel_size=torch.cuda.device_count(),dtype=torch.float16,gpu_memory_utilization=0.9,max_model_len=self.max_length,enforce_eager=True,kv_cache_dtype="fp8")        
+            self.model = vllm(model=self.model_name,tensor_parallel_size=torch.cuda.device_count(),dtype=torch.float16,gpu_memory_utilization=0.9,max_model_len=self.max_length,enforce_eager=True)
         else:
-            self.model = vllm(model=self.model_name,tensor_parallel_size=torch.cuda.device_count(),quantization=self.quantization)
+            # quant_config = BitsAndBytesConfig(
+            #     load_in_4bit=True,
+            #     bnb_4bit_quant_type="nf4",
+            #     bnb_4bit_compute_dtype=torch.bfloat16
+            # )
+            self.model = vllm(model=self.model_name,tensor_parallel_size=torch.cuda.device_count(),quantization=self.quantization, load_format=self.quantization, trust_remote_code=True, gpu_memory_utilization=0.9,max_model_len=self.max_length, enforce_eager = True)
         self.sampling_params =  SamplingParams(temperature=1,max_tokens=max_new_tokens,best_of=1, top_p=1, top_k=-1)
 
 
@@ -57,8 +63,11 @@ class LLM(Generator):
         ignore_index = -100
         q_ids = [e['q_id'] for e in examples]
         instr = [self.format_instruction(e) for e in examples]
+        if "label" in examples[0]:
+            label = [[e['label']] if isinstance(e['label'], str) else e['label'] for e in examples]
+        else:
+            label = [[""]] * len(examples)
 
-        label = [e['label'] if isinstance(e['label'], str) else e['label'] for e in examples]
         query = [e['query'] for e in examples]
         ranking_label = [e['ranking_label'] for e in examples] if 'ranking_label' in examples[0] else [None] * len(examples)
 
@@ -86,11 +95,11 @@ class LLM(Generator):
         if 'doc' in sample:
             docs = ''
             for i, doc in enumerate(sample['doc']):
-                doc = ' '.join(doc.split()[:self.max_doc_len])
-                docs += f"Document {i+1}: {doc}\n"
-            compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs)
+                doc = ' '.join(doc.split())
+                docs += f"Document [{i+1}]: {doc}\n"
+            compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs, example=self.prompt.example)
         else:
             # without retrieval we don't put documents in the prompt
-            compiled_prompt = self.compile_prompt(self.prompt.system_without_docs, self.prompt.user_without_docs, question)
+            compiled_prompt = self.compile_prompt(self.prompt.system_without_docs, self.prompt.user_without_docs, question, example=self.prompt.example)
 
         return compiled_prompt

@@ -11,3 +11,8 @@ config/rag-ncp.yaml
 modules/sedWI9tLD
 modules/sedXBPyUc
 models/generators/sed3rastF
+/runs/custom
+runs/.DS_Store
+slurm/basic.sh
+slurm/basic.sh
+/slurm

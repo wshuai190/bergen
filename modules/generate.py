@@ -10,10 +10,7 @@ from hydra.utils import instantiate
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset, DataLoader
 from modules.dataset import Tokenized_Sorted_Dataset
-from models.generators.llm_cocom import COCOMLLM
-from models.generators.llm_icae import LLMICAE
-from models.generators.oracle_provenance import OracleProvenance
-from models.generators.oracle_answer import OracleAnswer
+from models.generators.llm import LLM
 import torch
 
 
@@ -30,7 +27,7 @@ class Generate():
         self.model = instantiate(init_args, prompt=prompt, generation_top_k=generation_top_k)
 
     def eval(self, dataset):
-        if isinstance(self.model, COCOMLLM) or isinstance(self.model, OracleProvenance) or isinstance(self.model, OracleAnswer) or isinstance(self.model, LLMICAE):
+        if not isinstance(self.model, LLM):
             dataloader = DataLoader(dataset, batch_size=self.batch_size,
                                     collate_fn=lambda l: self.model.collate_fn(l, eval=True), num_workers=4)
         else:

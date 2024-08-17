@@ -12,9 +12,10 @@ from models.generators.generator import Generator
 class OpenAI(Generator):
     def __init__(self, 
                 model_name="gpt-3.5-turbo", 
-                max_new_tokens=1, 
-                max_doc_len=100,
+                max_new_tokens=256,
+                max_doc_len=512,
                 max_length=None,
+                generation_top_k=5,
                 prompt=None
                  ):
         self.client = openai.OpenAI(api_key = os.environ.get("OPENAI_API_KEY"),)
@@ -27,6 +28,7 @@ class OpenAI(Generator):
         self.completion_cost = 0
         self.max_doc_len = max_doc_len
         self.max_length = max_length
+        self.generation_top_k = generation_top_k
 
     def generate(self, messages):
         responses=[]
@@ -87,12 +89,15 @@ class OpenAI(Generator):
     
     def collate_fn(self, examples, eval=False, **kwargs):
         q_ids = [e['q_id'] for e in examples]
-        instr = [self.format_instruction(e) for e in examples]
-
-        label = [e['label'] if isinstance(e['label'], str) else e['label'] for e in examples]
+        if "label" in examples[0]:
+            label = [e['label'] if isinstance(e['label'], str) else e['label'] for e in examples]
+        else:
+            label = [[""]] * len(examples)
         query = [e['query'] for e in examples]
-        ranking_label = [e['ranking_label'] for e in examples] if 'ranking_label' in examples[0] else [None] * len(examples)
-
+        if "ranking_label" in examples[0]:
+            ranking_label = [e['ranking_label'] for e in examples] if 'ranking_label' in examples[0] else [None] * len(examples)
+        else:
+            ranking_label = [None] * len(examples)
         data_dict = {}
         # for inference just format and tokenize instruction 
         instr = [self.format_instruction(e) for e in examples]
@@ -116,8 +121,8 @@ class OpenAI(Generator):
         if 'doc' in sample:
             docs = ''
             for i, doc in enumerate(sample['doc']):
-                doc = ' '.join(doc.split()[:self.max_doc_len])
-                docs += f"Document {i+1}: {doc}\n"
+                #doc = ' '.join(doc.split())
+                docs += f"Document [{i+1}]: {doc}\n"
             compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs)
         else:
             # without retrieval we don't put documents in the prompt

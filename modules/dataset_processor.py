@@ -719,7 +719,33 @@ class MsMarcoDevQueries(Processor):
         super().__init__(*args, **kwargs, dataset_name=dataset_name)
 
     def process(self):
-        queries_d = "/scratch/project/neural_ir/dylan/msmarco_v2.1/msmarco_dev/topics.msmarco-v2-doc.dev.txt"  # super hard-coded path, see how to do properly
+        queries_d = "../msmarco_v2.1/msmarco_dev/topics.msmarco-v2-doc.dev.txt"  # super hard-coded path, see how to do properly
+        with open(queries_d) as f:
+            ids, queries = zip(*[line.strip().split("\t") for line in f])
+        dataset = datasets.Dataset.from_dict({"id":ids, "content": queries})  # no need for split?
+        return dataset
+
+class TrecRAGDevQueries(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'trec_rag_dev'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        queries_d = "../msmarco_v2.1/trec_rag_valid/topics.rag24.raggy-dev.txt"  # super hard-coded path, see how to do properly
+        with open(queries_d) as f:
+            ids, queries = zip(*[line.strip().split("\t") for line in f])
+        dataset = datasets.Dataset.from_dict({"id":ids, "content": queries})  # no need for split?
+        return dataset
+
+class TrecRAGTestQueries(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'trec_rag_test'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        queries_d = "../msmarco_v2.1/trec_rag_test/topics.rag24.test.txt"  # super hard-coded path, see how to do properly
         with open(queries_d) as f:
             ids, queries = zip(*[line.strip().split("\t") for line in f])
         dataset = datasets.Dataset.from_dict({"id":ids, "content": queries})  # no need for split?
@@ -788,8 +814,13 @@ class MSMARCOV21SEG(Processor):
         super().__init__(*args, **kwargs, dataset_name=dataset_name)
 
     def process(self):
-        dataset = datasets.load_dataset("ielabgroup/msmarco_v2.1_doc_segmented_dataset", num_proc=self.num_proc)
-
+        try:
+            dataset = datasets.load_from_disk("/scratch/project/neural_ir/dylan/COCOM/msmarco_v2.1_doc_segmented_dataset_processed")
+        except:
+            print("loading from IR dataset")
+            dataset = datasets.load_dataset("ielabgroup/msmarco_v2.1_doc_segmented_dataset", num_proc=self.num_proc)["train"]
+        #if "url" in dataset.column_names:
+        dataset = dataset.remove_columns("url")
         return dataset
 
 class KILT100w(Processor):

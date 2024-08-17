@@ -1,0 +1,3 @@
+init_args:
+  _target_: models.retrievers.custom.CUSTOM
+  model_name: "custom_stella"
