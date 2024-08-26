@@ -1,0 +1,16 @@
+train:
+    doc: null
+    query: null
+dev:
+    doc:
+        init_args:
+            _target_: modules.dataset_processor.MSMARCOV21SEG
+            split: "full"
+
+    query:
+        init_args:
+            _target_: modules.dataset_processor.TrecRAGTestQueries
+            split: "test"
+test:
+    doc: null
+    query: null
