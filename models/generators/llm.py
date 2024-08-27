@@ -196,7 +196,8 @@ class LLM(Generator):
         if 'doc' in sample:
             docs = ''
             for i, doc in enumerate(sample['doc']):
-                doc = ' '.join(doc.split()[:self.max_doc_len])
+                #doc = ' '.join(doc.split()[:self.max_doc_len])
+                doc = ' '.join(doc.split())
                 docs += f"Document [{i+1}]: {doc}\n"
             compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs)
         else:
