@@ -4,12 +4,11 @@ train:
 dev:
     doc:
         init_args:
-            _target_: modules.dataset_processor.PubMedrecbiogen2024
+            _target_: modules.dataset_processor.PubMed2023
             split: "train"
-
     query:
         init_args:
-            _target_: modules.dataset_processor.TrecRAGDevQueries
+            _target_: modules.dataset_processor.TrecBioGen2024Queries
             split: "validation"
 test:
     doc: null

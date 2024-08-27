@@ -751,6 +751,24 @@ class TrecRAGTestQueries(Processor):
         dataset = datasets.Dataset.from_dict({"id":ids, "content": queries})  # no need for split?
         return dataset
 
+class TrecBioGen2024Queries(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'trec_biogen_2024'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        queries_d = "../trec_biogen_data/test/BioGen2024topics-json.txt"  # super hard-coded path, see how to do properly
+        with open(queries_d) as f:
+            data_dict = json.load(f)
+            ids = list(item["id"] for item in data_dict["topics"])
+            topics = list(item["topic"] for item in data_dict["topics"])
+            questions = list(item["question"] for item in data_dict["topics"])
+            narratives = list(item["narrative"] for item in data_dict["topics"])
+            contents = [f"Topic: {topic}\nQuestion: {question}\nNarratives:{narrative}\n" for topic, question, narrative in zip(topics, questions, narratives)]
+        dataset = datasets.Dataset.from_dict({"id":ids, "content": contents})
+        return dataset
+
 # ---------------------------------------- #
 # Document processors
 # ---------------------------------------- #
@@ -950,6 +968,26 @@ class PubMed2023(Processor):
         
         dataset = dataset.map(map_fn, num_proc=self.num_proc)
         dataset = dataset.remove_columns(['MedlineCitation', 'PubmedData'])
+        return dataset
+
+
+
+class PubMedrecbiogen2024(Processor):
+
+    def __init__(self, *args, **kwargs):
+        self.dataset_name = 'pubmed-trec-biogen-2024'
+        super().__init__(*args, **kwargs, dataset_name=self.dataset_name)
+
+    def process(self):
+        hf_name = "ielabgroup/trec_biogen_pubmed_corpus"
+        dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc)[self.split]
+        def map_fn(example):
+            example[
+                'content'] = f"Title: {example['title']} Abstract: {example['abstract']}"
+            example['id'] = str(example['docid'])
+
+            return example
+        dataset = dataset.map(map_fn, num_proc=self.num_proc)
         return dataset
     
     
