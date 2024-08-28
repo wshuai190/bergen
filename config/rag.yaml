@@ -18,7 +18,7 @@ dataset_folder: 'datasets/'
 index_folder: 'indexes/'
 runs_folder: 'runs/'
 experiments_folder: 'experiments/'
-processing_num_proc: 2
+processing_num_proc: 20
 hydra:
     job:
         chdir: False

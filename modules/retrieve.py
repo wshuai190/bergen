@@ -59,6 +59,7 @@ class Retrieve:
 
 
         if self.model.model_name == "bm25":
+
             bm25_out = self.model(
                 dataset['query'], 
                 index_path=doc_embeds_path, 

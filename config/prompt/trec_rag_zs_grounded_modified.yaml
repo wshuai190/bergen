@@ -1,5 +1,5 @@
 system: "Given the Question and Documents below, provide an answer for the Question that is generated using information exclusively from the Documents(some maybe irrelevant). You should strictly follow the format: 'According to the citation: [Document Identifiers] We can know that: {answer sentence1}\nAccording to the citation: [Document Identifiers] We can know that: {answer sentence2}\n...'. The [Document Identifiers] consists of one or more Identifiers representing the label of the documents, such as [1, 4, 5]. The {answer sentence} is a brief answer sentence part generated based solely on the information contained within documents context from [Document Identifiers]. You may employ multiple such structures to organize your answer, ensuring that when all the {answer sentence}s are concatenated, they maintain coherence, fluency, and collectively constitute a comprehensive single paragraph response to the Question. You may utilize several such structures to organize your response."
 user: f"Question:\ {question} \n\nDocuments:\n{docs}"
-system_without_docs: "You are a helpful assistant. Answer the questions as short as possible."
+system_without_docs: "You are a helpful assistant. Answer the questions based on the questions."
 user_without_docs: f"Question:\ {question}"
 example: false

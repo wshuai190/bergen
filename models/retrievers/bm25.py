@@ -27,6 +27,7 @@ class BM25:
         q_ids, doc_ids, scores, docs = list(), list(), list(), list()
         for examples in tqdm(dataset.iter(batch_size=batch_size), desc=f'Retrieving with {num_threads} threads.'):
             q_id_batch, query_batch = examples['id'], examples['content']
+
             all_hits = model.batch_search(queries=query_batch, qids=q_id_batch, k=top_k_documents, threads=self.num_threads)
             for q_id, hits in all_hits.items():
                 q_scores, q_doc_ids, q_docs = list(), list(), list()

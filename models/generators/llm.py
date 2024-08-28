@@ -199,9 +199,9 @@ class LLM(Generator):
                 #doc = ' '.join(doc.split()[:self.max_doc_len])
                 doc = ' '.join(doc.split())
                 docs += f"Document [{i+1}]: {doc}\n"
-            compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs)
+            compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs, example=self.prompt.example)
         else:
             # without retrieval we don't put documents in the prompt
-            compiled_prompt = self.compile_prompt(self.prompt.system_without_docs, self.prompt.user_without_docs, question)
+            compiled_prompt = self.compile_prompt(self.prompt.system_without_docs, self.prompt.user_without_docs, question, example=self.prompt.example)
  
         return compiled_prompt + self.get_response()

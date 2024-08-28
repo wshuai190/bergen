@@ -4,7 +4,7 @@ train:
 dev:
     doc:
         init_args:
-            _target_: modules.dataset_processor.PubMed2023
+            _target_: modules.dataset_processor.PubMedrecbiogen2024
             split: "train"
     query:
         init_args:

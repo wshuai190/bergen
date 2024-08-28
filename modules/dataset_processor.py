@@ -754,23 +754,23 @@ class TrecRAGTestQueries(Processor):
 class TrecBioGen2024Queries(Processor):
 
     def __init__(self, *args, **kwargs):
-        dataset_name = 'trec_biogen_2024'
+        dataset_name = 'trec-biogen-2024'
         super().__init__(*args, **kwargs, dataset_name=dataset_name)
 
     def process(self):
         queries_d = "../trec_biogen_data/test/BioGen2024topics-json.txt"  # super hard-coded path, see how to do properly
         with open(queries_d) as f:
             data_dict = json.load(f)
-            ids = list(item["id"] for item in data_dict["topics"])
+            ids = list(str(item["id"]) for item in data_dict["topics"])
             topics = list(item["topic"] for item in data_dict["topics"])
             questions = list(item["question"] for item in data_dict["topics"])
             narratives = list(item["narrative"] for item in data_dict["topics"])
-            contents = [f"Topic: {topic}\nQuestion: {question}\nNarratives:{narrative}\n" for topic, question, narrative in zip(topics, questions, narratives)]
+            contents = [f"Topic: {topic}\nQuestion: {question}\nNarratives: {narrative}\n" for topic, question, narrative in zip(topics, questions, narratives)]
         dataset = datasets.Dataset.from_dict({"id":ids, "content": contents})
         return dataset
 
 # ---------------------------------------- #
-# Document processors
+# Document processorsyuyt
 # ---------------------------------------- #
 class ReproduceWikiCorpora63(Processor):
 
@@ -973,7 +973,6 @@ class PubMed2023(Processor):
 
 
 class PubMedrecbiogen2024(Processor):
-
     def __init__(self, *args, **kwargs):
         self.dataset_name = 'pubmed-trec-biogen-2024'
         super().__init__(*args, **kwargs, dataset_name=self.dataset_name)
