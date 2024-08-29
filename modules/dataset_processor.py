@@ -754,7 +754,7 @@ class TrecRAGTestQueries(Processor):
 class TrecBioGen2024Queries(Processor):
 
     def __init__(self, *args, **kwargs):
-        dataset_name = 'trec-biogen-2024'
+        dataset_name = 'trec_biogen_2024'
         super().__init__(*args, **kwargs, dataset_name=dataset_name)
 
     def process(self):
@@ -978,8 +978,9 @@ class PubMedrecbiogen2024(Processor):
         super().__init__(*args, **kwargs, dataset_name=self.dataset_name)
 
     def process(self):
-        hf_name = "ielabgroup/trec_biogen_pubmed_corpus"
-        dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc)[self.split]
+
+        hf_name = "ielabgroup/trec_biogen_pubmed_oscar_corpus"
+        dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc, revision="3ff3dd680fe0372b19804e1289c59ba853ec2661")[self.split]
         def map_fn(example):
             example[
                 'content'] = f"Title: {example['title']} Abstract: {example['abstract']}"

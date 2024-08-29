@@ -4,4 +4,4 @@ init_args:
   max_new_tokens: 512
   max_length: null
   quantization: "no"
-batch_size: 4
+batch_size: 1

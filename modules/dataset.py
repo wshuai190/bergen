@@ -36,7 +36,8 @@ class Tokenized_Sorted_Dataset(Dataset):
 
             # Sort by tokenized input length
         print("Average length of tokenized input: ", sum(length_all_list) / len(length_all_list))
-        self.sorted_data = sorted(processed_data, key=lambda x: x[0])
+        print({"max": max(length_all_list), "min": min(length_all_list)})
+        self.sorted_data = sorted(processed_data, key=lambda x: x[0], reverse=True)
 
 
     def __len__(self):

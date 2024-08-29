@@ -19,7 +19,7 @@ class LLM(Generator):
     def __init__(self, 
                 model_name=None, 
                 max_new_tokens=1, 
-                max_doc_len=512,
+                max_doc_len=384,
                 max_length=None,
                 prompt=None,
                 quantization=None,
@@ -95,14 +95,15 @@ class LLM(Generator):
         else:
             self.model = model_class.from_pretrained(
                 self.model_name,
-                torch_dtype = torch.bfloat16
+                torch_dtype = torch.bfloat16,
+                device_map = "auto"
             )
 
         # self.model.merge_and_unload()
         #self.model.config.use_cache = False
         self.model = self.model.bfloat16()
-        if quantization =="no":
-            self.model = self.model.to("cuda") if torch.cuda.is_available() else self.model
+        # if quantization =="no":
+        #     self.model = self.model.to("cuda") if torch.cuda.is_available() else self.model
         self.model.config.pretraining_tp = 1
         self.max_new_tokens = max_new_tokens
         self.prompt = prompt
@@ -195,9 +196,13 @@ class LLM(Generator):
         # in case we have previously retrieved documents
         if 'doc' in sample:
             docs = ''
-            for i, doc in enumerate(sample['doc']):
-                #doc = ' '.join(doc.split()[:self.max_doc_len])
+            sample_docs = sample['doc']
+            #tokenize them, and truncate to max_doc_len, then batch decode back
+            sample_docs_tokenized = self.tokenizer(sample_docs, truncation=True, max_length=self.max_doc_len, padding="max_length", return_tensors="pt")
+            sample_docs_decoded = self.tokenizer.batch_decode(sample_docs_tokenized['input_ids'], skip_special_tokens=True)
+            for i, doc in enumerate(sample_docs_decoded):
                 doc = ' '.join(doc.split())
+                #doc = ' '.join(doc.split())
                 docs += f"Document [{i+1}]: {doc}\n"
             compiled_prompt = self.compile_prompt(self.prompt.system, self.prompt.user, question, docs, example=self.prompt.example)
         else:
