@@ -1,9 +1,9 @@
 init_args: 
   _target_: models.generators.llm_cocom.COCOMLLM
-  model_name: "cocom"
+  model_name: "wshuai190/COCOM-4-kilt-pretrained-0.5-Mistral_qa"
   decoder_model_name: "mistralai/Mistral-7B-Instruct-v0.2"
   compr_model_name: "google-bert/bert-base-uncased"
-  max_new_tokens: 128
+  max_new_tokens: 1024
   sep: True
   compr_rate: 128
   compr_linear_type: 'concat'

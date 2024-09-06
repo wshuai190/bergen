@@ -1,6 +1,6 @@
 init_args: 
   _target_: models.generators.llm_cocom.COCOMLLM
-  model_name: "cocom"
+  model_name: ""
   decoder_model_name: "mistralai/Mistral-7B-Instruct-v0.2"
   compr_model_name: null
   max_new_tokens: 128

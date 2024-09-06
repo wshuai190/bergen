@@ -769,6 +769,25 @@ class TrecBioGen2024Queries(Processor):
         dataset = datasets.Dataset.from_dict({"id":ids, "content": contents})
         return dataset
 
+
+class TrecBioGen2024QueriesCut(Processor):
+
+    def __init__(self, *args, **kwargs):
+        dataset_name = 'trec_biogen_2024'
+        super().__init__(*args, **kwargs, dataset_name=dataset_name)
+
+    def process(self):
+        queries_d = "../trec_biogen_data/test_cut/BioGen2024topics-json.txt"  # super hard-coded path, see how to do properly
+        with open(queries_d) as f:
+            data_dict = json.load(f)
+            ids = list(str(item["id"]) for item in data_dict["topics"])
+            topics = list(item["topic"] for item in data_dict["topics"])
+            questions = list(item["question"] for item in data_dict["topics"])
+            narratives = list(item["narrative"] for item in data_dict["topics"])
+            contents = [f"Topic: {topic}\nQuestion: {question}\nNarratives: {narrative}\n" for topic, question, narrative in zip(topics, questions, narratives)]
+        dataset = datasets.Dataset.from_dict({"id":ids, "content": contents})
+        return dataset
+
 # ---------------------------------------- #
 # Document processorsyuyt
 # ---------------------------------------- #
@@ -979,8 +998,8 @@ class PubMedrecbiogen2024(Processor):
 
     def process(self):
 
-        hf_name = "ielabgroup/trec_biogen_pubmed_oscar_corpus"
-        dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc, revision="3ff3dd680fe0372b19804e1289c59ba853ec2661")[self.split]
+        hf_name = "ielabgroup/trec_biogen_pubmed_oscar_corpus_fix"
+        dataset = datasets.load_dataset(hf_name, num_proc=self.num_proc)[self.split]
         def map_fn(example):
             example[
                 'content'] = f"Title: {example['title']} Abstract: {example['abstract']}"

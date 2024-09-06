@@ -25,7 +25,7 @@ class COCOMLLM(Generator):
                 query_dependant = False,
                 training_form="both",
                 context_max_length=512,
-                max_length=1280,
+                max_length=None,
                 test_mode="ft", # either ft or ae, ae is for autoencoding, ft is for fine-tune tasks
                 **kwargs,
     ):
@@ -162,8 +162,11 @@ class COCOMLLM(Generator):
 
             if eval:
                 #for inference
-
-                label = [[e['label']] if isinstance(e['label'], str) else e['label'] for e in examples]
+                # if label does not exist, it's a test set
+                if "label" in examples[0]:
+                    label = [[e['label']] if isinstance(e['label'], str) else e['label'] for e in examples]
+                else:
+                    label = [[""]] * len(examples)
                 if self.test_mode == 'ae':
                     instr = [self.model.decoder_tokenizer.ae_token + self.model.decoder_tokenizer.bos_token + mem_tokens * self.model.generation_top_k for q in query]
                 else:
@@ -174,7 +177,10 @@ class COCOMLLM(Generator):
                 if self.test_mode == 'ae':
                     # it's not possible to have ae mode for training
                     raise ValueError("AE mode is not possible for training")
-                label = [e['label'] if isinstance(e['label'], str) else random.choice(e['label']) for e in examples]
+                if "label" in examples[0]:
+                    label = [[e['label']] if isinstance(e['label'], str) else e['label'] for e in examples]
+                else:
+                    label = [[""]] * len(examples)
      
                 instr = [self.model.decoder_tokenizer.bos_token + mem_tokens * self.model.generation_top_k + '[INST]' + q + self.get_response() + e + self.model.decoder_tokenizer.eos_token  for q, e in zip(query, label)]
                 inp_dec = self.model.decoder_tokenizer(instr, return_tensors='pt', padding="longest", add_special_tokens=False, truncation=True, max_length=self.model_max_length)
@@ -191,7 +197,8 @@ class COCOMLLM(Generator):
             data_dict = {}
             if not eval:
                 data_dict['label_ids'] =  label_ids
-
+            # print the length of the input_ids
+            print(inp_dec['input_ids'].size())
             model_input = {
                 'enc_input_ids': inp_enc['input_ids'],
                 'enc_attention_mask': inp_enc['attention_mask'],

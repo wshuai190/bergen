@@ -17,3 +17,6 @@ slurm/basic.sh
 slurm/basic.sh
 /slurm
 trec_rag_test_2024
+/trec_biogen_runs
+rubbish/trec_biogen/.DS_Store
+/rubbish

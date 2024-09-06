@@ -213,7 +213,8 @@ class COCOM(PreTrainedModel):
         # get first mem_token inidices
         first_mem_token_indices = torch.argmax((dec_input_ids == self.decoder_tokenizer.mem_token_id).int(), dim=1)
         batch_size = inputs_embeds.size(0)
-        # for each example in batch, replace them with compressed embeddings 
+        # for each example in batch, replace them with compressed embeddings
+
         for i in range(batch_size):
             for j in range(indices[i], indices[i + 1]):
                 start_idx = first_mem_token_indices[i].item() + (j-indices[i]) * slot_len
